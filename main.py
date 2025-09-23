@@ -7,6 +7,19 @@ Original file is located at
     https://colab.research.google.com/drive/1ZnggLTZ4Zzhe3uEXJSAG75eheS3gNLv9
 """
 
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+#for MI and VI
+from sklearn.metrics import mutual_info_score
+from sklearn.preprocessing import KBinsDiscretizer
+from scipy.stats import entropy
+#For PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import MultiLabelBinarizer
+
 #Run completeness with a threshold of 80%
 _, completeness_vars, _ = completeness_filter(data, 80.0)
 
