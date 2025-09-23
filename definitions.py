@@ -1,0 +1,349 @@
+# -*- coding: utf-8 -*-
+"""definitions.ipynb
+
+Libraries
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+#for MI and VI
+from sklearn.metrics import mutual_info_score
+from sklearn.preprocessing import KBinsDiscretizer
+from scipy.stats import entropy
+#For PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import MultiLabelBinarizer
+
+#Completeness analysis and filtering
+
+def completeness_filter(df: pd.DataFrame, min_completeness_pct: float = 40.0):
+
+    #Numeric and non-numeric columnsvariation_of_information_score
+    numerics = df.select_dtypes(include=np.number).columns.tolist()
+    no_numerics = df.select_dtypes(exclude=np.number).columns.tolist()
+    #Completeness analysis
+    completeness = df[numerics].apply(lambda col: (col != 0).sum() / len(col) * 100)
+
+    #Create the completeness percent table
+    pct_completeness = completeness.reset_index()
+    pct_completeness.columns = ['Variable', 'completeness_Pct']
+    pct_completeness = pct_completeness.sort_values(by='completeness_Pct', ascending=True)
+
+    #Vars that passed the filter
+    numeric_filtered = completeness[completeness >= min_completeness_pct].index.tolist()
+    #Combine non-numeric columns (which are always saved) with numeric columns that passed
+    final_cols = no_numerics + numeric_filtered
+
+    #Final filter
+    df_filtered = df[final_cols]
+
+    return df_filtered, numeric_filtered, pct_completeness
+
+#Variance analysis and filtering
+
+def fs_varianced(df, quartile=4, return_variance_table=False):
+    """
+    Filtra columnas de un DataFrame según su varianza y, opcionalmente,
+    devuelve la tabla de varianzas.
+
+    Args:
+    -----------
+    df (pd.DataFrame): DataFrame de entrada.
+    quartile (int): Cuartil a conservar (1, 2, 3, o 4).
+    keep_non_numeric (bool): Si es True, conserva las columnas no numéricas.
+    return_variance_table (bool): Si es True, devuelve también la tabla de varianzas.
+
+    Returns:
+    --------
+    pd.DataFrame or tuple:
+        - Si return_variance_table es False (default), devuelve solo el DataFrame filtrado.
+        - Si es True, devuelve una tupla: (DataFrame_filtrado, DataFrame_de_varianzas).
+    """
+    if isinstance(df, dict):
+        df = pd.DataFrame(df)
+
+    #Calculate the variance of all numeric columns.
+    numeric_cols = df.select_dtypes(include=["number"])
+    variance_table = numeric_cols.var().to_frame("Variance").sort_values("Variance", ascending=False)
+
+    #Calculate the quartile limits
+    quantiles = np.quantile(variance_table["Variance"], [0, 0.25, 0.5, 0.75, 1.0])
+    bounds = {
+        1: (quantiles[0], quantiles[1]),
+        2: (quantiles[1], quantiles[2]),
+        3: (quantiles[2], quantiles[3]),
+        4: (quantiles[3], quantiles[4])
+    }
+
+    #Select vars within the quartile specified
+    low, high = bounds[quartile]
+    variance_vars = variance_table[
+        (variance_table["Variance"] >= low) & (variance_table["Variance"] <= high)
+    ].index.tolist()
+
+    #Filter data
+    non_numeric_cols = df.select_dtypes(exclude=["number"]).columns.tolist()
+    variance_vars = non_numeric_cols + variance_vars
+    filtered_df = df[variance_vars]
+
+    #If you need the variance table
+    if return_variance_table:
+        return filtered_df, variance_vars, non_numeric_cols, variance_table
+    else:
+        return filtered_df, variance_vars
+
+#Linear correlation filtering
+
+def fs_linear_corr(df, zscore_threshold=2.0):
+    """
+    Variable selection based on Pearson's linear correlation.
+
+    Params
+    ------
+    df : pd.DataFrame
+        Original dataset with numeric and non-numeric variables.
+    zscore_threshold : float
+        Z-score to define high correlation threshold.
+
+    Returns
+    -------
+    dict with:
+        - df_filtered: DataFrame with final columns (filtered numeric + non-numeric)
+        - final_features: list of final selected variables
+        - stats: dict with mean, std, thresholds, and deleted variables
+- corr_matrix: final squared correlation matrix
+- corrs_pre: pre-filtered upper triangle values
+- corrs_post: post-filtered upper triangle values
+    """
+
+    #Get numric and non numeric vars
+    num_df = df.select_dtypes(include=[np.number]).copy()
+    non_num_df = df.select_dtypes(exclude=[np.number]).copy()
+
+    #Drop zero variance vars
+    variance = num_df.var()
+    num_df = num_df.loc[:, variance > 0]
+
+    #Corr matrix
+    corr_matrix = num_df.corr(method='pearson').fillna(0)
+
+    #Get correlation distributions
+    corrs_pre = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)).stack()
+    mean_corr = corrs_pre.mean()
+    std_corr = corrs_pre.std()
+
+    #Define thresholds based on z-scores
+    upper_threshold = mean_corr + zscore_threshold * std_corr
+    lower_threshold = mean_corr - zscore_threshold * std_corr
+
+    #Drop reduntant data
+    to_drop = set()
+    for col in corr_matrix.columns:
+        if col in to_drop:
+            continue
+        high_corr = corr_matrix.index[(corr_matrix[col].abs() > upper_threshold) & (corr_matrix.index != col)]
+        to_drop.update(high_corr)
+
+    final_features = [col for col in num_df.columns if col not in to_drop]
+
+    #Final dataframe
+    df_filtered = pd.concat([num_df[final_features], non_num_df], axis=1)
+
+    #Final corr matrix (only with selected features)
+    corr_matrix_final = df_filtered[final_features].corr().fillna(0)
+
+    #Final corr distribution
+    corrs_post = corr_matrix_final.where(np.triu(np.ones(corr_matrix_final.shape), k=1).astype(bool)).stack()
+
+    stats = {
+        "mean_corr": mean_corr,
+        "std_corr": std_corr,
+        "upper_threshold": upper_threshold,
+        "lower_threshold": lower_threshold,
+        "zscore_threshold": zscore_threshold,
+        "num_removed": len(to_drop)#,
+       # "removed_features": list(to_drop)
+    }
+
+    return {
+        "df_filtered": df_filtered,
+        "final_features": final_features,
+        "stats": stats,
+        "corr_matrix_pre": corr_matrix,
+        "corr_matrix_final": corr_matrix_final,
+        "corrs_pre": corrs_pre,
+        "corrs_post": corrs_post
+    }
+
+def fs_mi_vi_matrix(df: pd.DataFrame, target_vars: list, n_bins: int = 10, threshold_quantile: float = 0.5):
+    """
+    Calculate MI and VI, and filter to retain the MOST DIFFERENT variables (highest VI) with respect to the targets, for feature selection.
+    """
+    #Only numerics first
+    numerics = df.select_dtypes(include=np.number)
+
+    #Check missing targets in the data
+    missing_targets = set(target_vars) - set(numerics.columns)
+    if missing_targets:
+        raise ValueError(f"Target variables not found or not numeric: {missing_targets}")
+
+    #Discretize with KBinsDiscretizer (because some distributions are short)
+    discretizer = KBinsDiscretizer(n_bins=n_bins, encode="ordinal", strategy="quantile", subsample=None)
+    discretized_data = discretizer.fit_transform(numerics)
+    df_disc = pd.DataFrame(discretized_data, index=numerics.index, columns=numerics.columns)
+
+    #Initialize matrices
+    mi_matrix = pd.DataFrame(0.0, index=target_vars, columns=df_disc.columns)
+    vi_matrix = pd.DataFrame(0.0, index=target_vars, columns=df_disc.columns)
+
+    #Calculate MI and VI
+    for t in target_vars:
+        t_vals = df_disc[t].astype(int)
+        for c in df_disc.columns:
+            c_vals = df_disc[c].astype(int)
+            if t_vals.nunique() <= 1 or c_vals.nunique() <= 1:
+                continue
+
+            mi = mutual_info_score(t_vals, c_vals)
+            #Check entropy
+            h_t = entropy(np.bincount(t_vals) / len(t_vals))
+            h_c = entropy(np.bincount(c_vals) / len(c_vals))
+            vi = h_t + h_c - 2 * mi
+
+            mi_matrix.loc[t, c] = mi
+            vi_matrix.loc[t, c] = vi
+
+    #Get threshold on VI (distance of information)
+    """
+    Take all distances from the VI matrix, Ignore trivial comparisons (zero distance), sort  distances internally from smallest to largest.
+    Set a cut-off based on a percentage (the quantile).
+    For example, if you use the 0.90 quantile, you are finding the distance value that separates the 90% of the ‘closest’ connections from the 10% of the ‘furthest’ ones.
+    """
+
+    values = vi_matrix.values.flatten()
+    values = values[values > 0] #This line removes all zeros from the VI vector, then having only data with VI.
+    threshold = np.quantile(values, threshold_quantile) if len(values) > 0 else None
+
+    #Filter matrices to keep only those that exceed the VI threshold values > 0
+    vi_filtered = vi_matrix.where(vi_matrix >= threshold, 0) #Keep the high VI values that meet the condition.
+    mi_filtered = mi_matrix.where(vi_matrix >= threshold, 0) #use the ‘difference’ mask (from VI) to see which MI values correspond to those pairs of ‘different’ variables.
+
+    features_information = vi_filtered.columns[(vi_filt > 0).any(axis=0)].tolist()
+
+    return mi_matrix, vi_matrix, features_information, mi_filtered, vi_filtered, threshold
+
+def fs_pca(df: pd.DataFrame, n_components: int | None = None, n_top_variables: int = 5, components: int None):
+    """
+    Perform PCA
+
+    Args:
+        df (pd.DataFrame): Input DataFrame.
+        n_components (int | None): Number of PCs to calculate. If None, calculate all possible ones.
+        n_top_variables (int): Number of most influential variables to report per component.
+
+    Returns:
+        tuple: A tuple with all the PCA results.
+    """
+    numerics = df.select_dtypes(include=np.number)
+
+    #Validation: n_components cannot be greater than the number of variables if it is an integer.
+    if isinstance(n_components, int) and numerics.shape[1] < n_components:
+        raise ValueError("The number of components cannot be greater than the number of variables.")
+
+    scaled_data = StandardScaler().fit_transform(numerics)
+
+    #Excecute PCA
+    pca = PCA(n_components=n_components)
+    pca.fit(scaled_data)
+
+    #Transform data (scores)
+    pca_data = pca.transform(scaled_data)
+    pca_df = pd.DataFrame(pca_data,
+                          columns=[f'PC{i+1}' for i in range(pca.n_components_)],
+                          index=df.index)
+
+    #Calculate Loadings
+    loadings_df = pd.DataFrame(
+        pca.components_.T,
+        columns=[f'PC{i+1}' for i in range(pca.n_components_)],
+        index=numerics.columns
+    )
+
+    #Identify most influential variables per PC
+    top_variables = {}
+    for pc in loadings_df.columns:
+        top_vars = loadings_df[pc].abs().sort_values(ascending=False).head(n_top_variables).index.tolist()
+        top_variables[pc] = top_vars
+
+    #Get the variance per PC
+    explained_variance_ratio = pca.explained_variance_ratio_
+    cumulative_variance = np.cumsum(explained_variance_ratio)
+
+    #Based on the Scree Plot decided to keep the first 20 components.
+    components = 20
+
+    #Compile the lists of the N principal components.
+    list_of_lists = [top_variables[f'PC{i+1}'] for i in range(components)]
+
+    #Select the features, drop duplicates with set and order
+    selected_features_vector = sorted(list(set(sum(list_of_lists, []))))
+    print(selected_features_vector[:20]) #Only first 20
+
+    return pca, pca_df, loadings_df, top_variables, explained_variance_ratio, cumulative_variance
+
+def voting_matrix(filters_dict: dict, min_votes: int = 2):
+    """
+    Generates a voting matrix of variables filtered by different functions,
+    and returns the list of winning variables.
+
+    Args:
+        filters_dict (dict): Dictionary {filter_name: list_of_variables}.
+        min_votes (int): Minimum number of votes to consider a variable a winner.
+
+    Returns:
+        vote_df (pd.DataFrame): Binary voting matrix (variables x filters + votes).
+        winners (list): List of variables with at least `min_votes` votes.
+    """
+    #List of lists first!
+    filter_names = list(filters_dict.keys())
+    filter_vars = list(filters_dict.values())
+
+    #Use MultiLabelBinarizer
+    mlb = MultiLabelBinarizer()
+    binary_matrix = mlb.fit_transform(filter_vars)
+
+    #Create binary DataFrame (is the variable in the given list?)
+    vote_df = pd.DataFrame(binary_matrix.T, index=mlb.classes_, columns=filter_names)
+
+    #Add column with total votes
+    vote_df["votes"] = vote_df.sum(axis=1)
+
+    #And the winners are...
+    winners = vote_df[vote_df["votes"] >= min_votes].index.tolist()
+
+    return vote_df.sort_values("votes", ascending=False), winners
+
+def filter_dataframe(df: pd.DataFrame, winners: list):
+    """
+    Filters a DataFrame to keep the selected variables and all non-numeric columns.
+
+    Args:
+        df (pd.DataFrame): The original, complete DataFrame.
+        winners (list): A list of strings with the names of the selected numeric columns.
+
+    Returns:
+        pd.DataFrame: A new DataFrame containing only the “winners” columns and the non-numeric columns.
+    """
+    #Get non numeric cols
+    non_numeric_cols = df.select_dtypes(exclude=np.number).columns.tolist()
+
+    #Combine the list of winners with the non-numeric columns.
+    #Set varsto ensure there are no duplicates
+    final_cols_to_keep = non_numeric_cols + [w for w in winners if w not in non_numeric_cols]
+    #Filter DataFrame, use .copy()
+    filtered_df = df[final_cols_to_keep].copy()
+
+    return filtered_df, final_cols_to_keep
