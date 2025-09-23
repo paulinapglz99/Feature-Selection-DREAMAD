@@ -34,7 +34,7 @@ from definitions import (
 )
 
 #Flooring and capping
-final_data = flooring_capping(final_data, 0.05, 0.95)
+data = flooring_capping(data, 0.1, 0.90)
 
 #Run completeness with a threshold of 80%
 _, completeness_vars, _ = completeness_filter(data, 80.0)

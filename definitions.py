@@ -7,7 +7,18 @@ Original file is located at
     https://colab.research.google.com/drive/1URAYcmtLiUjV4nZVa5x5DLtXFxBzulEg
 """
 
-
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+#for MI and VI
+from sklearn.metrics import mutual_info_score
+from sklearn.preprocessing import KBinsDiscretizer
+from scipy.stats import entropy
+#For PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import MultiLabelBinarizer
 
 #Completeness analysis and filtering
 
@@ -94,7 +105,7 @@ and the numeric columns of the selected quartile.
 
     #If you need the variance table
 
-        return filtered_df, variance_table, variance_vars
+    return filtered_df, variance_table, variance_vars
 
 def fs_linear_corr(df, zscore_threshold=2.0):
     """
