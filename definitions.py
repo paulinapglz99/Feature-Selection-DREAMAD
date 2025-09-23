@@ -36,23 +36,34 @@ def completeness_filter(df: pd.DataFrame, min_completeness_pct: float = 40.0):
 
 #Variance analysis and filtering
 
-def fs_varianced(df, quartile=4, return_variance_table=False):
+def fs_varianced(df, quartile=4):
     """
-    Filtra columnas de un DataFrame según su varianza y, opcionalmente,
-    devuelve la tabla de varianzas.
+    Filters the columns of a DataFrame based on their variance quartile.
+
+    This function calculates the variance of all numeric columns in the
+    input DataFrame. It then identifies which columns belong to the
+    variance quartile specified by the user and returns a new
+    DataFrame containing only these selected columns (including non-numeric ones).
 
     Args:
-    -----------
-    df (pd.DataFrame): DataFrame de entrada.
-    quartile (int): Cuartil a conservar (1, 2, 3, o 4).
-    keep_non_numeric (bool): Si es True, conserva las columnas no numéricas.
-    return_variance_table (bool): Si es True, devuelve también la tabla de varianzas.
+    ----
+        df (pd.DataFrame or dict):
+            The input DataFrame to be filtered. It can also be a
+            dictionary that can be converted to a DataFrame.
+        quartile (int, optional):
+            The variance quartile to use as the selection criterion.
+            It must be an integer between 1 and 4. The default is 4 (the 25% of
+variables with the highest variance).
 
-    Returns:
-    --------
-    pd.DataFrame or tuple:
-        - Si return_variance_table es False (default), devuelve solo el DataFrame filtrado.
-        - Si es True, devuelve una tupla: (DataFrame_filtrado, DataFrame_de_varianzas).
+Returns:
+-------
+tuple:
+- filtered_df (pd.DataFrame): The DataFrame with the non-numeric columns
+and the numeric columns of the selected quartile.
+            - variance_table (pd.DataFrame): A table with the variance of
+              each numeric column, sorted from highest to lowest.
+- variance_vars (list): A list with the names of the
+              selected columns (including non-numeric ones).
     """
     if isinstance(df, dict):
         df = pd.DataFrame(df)
@@ -82,10 +93,8 @@ def fs_varianced(df, quartile=4, return_variance_table=False):
     filtered_df = df[variance_vars]
 
     #If you need the variance table
-    if return_variance_table:
-        return filtered_df, variance_table, variance_vars, non_numeric_cols
-    else:
-        return filtered_df, variance_vars
+
+        return filtered_df, variance_table, variance_vars
 
 def fs_linear_corr(df, zscore_threshold=2.0):
     """
@@ -272,7 +281,7 @@ def fs_pca(df: pd.DataFrame, n_components: int | None = None, n_top_variables: i
     explained_variance_ratio = pca.explained_variance_ratio_
     cumulative_variance = np.cumsum(explained_variance_ratio)
 
-    return pca, pca_df, loadings_df, top_variables, explained_variance_ratio, cumulative_variance
+    return pca, pca_df, loadings_df, top_variables, explained_variance_ratio, cumulative_variance, scaled_data
 
 def voting_matrix(filters_dict: dict, min_votes: int = 2):
     """

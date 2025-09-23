@@ -20,11 +20,27 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import MultiLabelBinarizer
 
+
+#Import own functions
+from definitions import (
+    completeness_filter,
+    fs_varianced,
+    fs_linear_corr,
+    fs_mi_vi_matrix,
+    fs_pca,
+    voting_matrix,
+    filter_dataframe,
+    flooring_capping
+)
+
+#Flooring and capping
+final_data = flooring_capping(final_data, 0.05, 0.95)
+
 #Run completeness with a threshold of 80%
 _, completeness_vars, _ = completeness_filter(data, 80.0)
 
 #Get variables that crossed the variance threshold
-_, variance_vars = fs_varianced(data, quartile=3, return_variance_table=False)
+_, _, variance_vars = fs_varianced(data, quartile=3, return_variance_table=False)
 
 #Get the vars that survided the linear correlation filter
 _, linear_filter_vars, _, _, _, _, _ = fs_linear_corr(data, zscore_threshold=2.0)
@@ -33,7 +49,7 @@ _, linear_filter_vars, _, _, _, _, _ = fs_linear_corr(data, zscore_threshold=2.0
 _, _, information_vars, _, _, _ = fs_mi_vi_matrix(data, target_vars, n_bins=10, threshold_quantile=0.5)
 
 #Get the variables that survived the filtering by PCA
-_, _, _, top_variables_pca, _, _ = fs_pca(data,  n_components=None, n_top_variables=50)
+_, _, _, top_variables_pca, _, _, _ = fs_pca(data,  n_components=None, n_top_variables=50)
 
 #Create vote matrix
 filters = {
@@ -48,8 +64,8 @@ vote_matrix, winners = voting_matrix(filters, min_votes=3)
 print("\nWinner variables:", winners)
 final_data, _ = filter_dataframe(df=data, winners=winners)
 
-#Final flooring and capping
-final_data = flooring_capping(final_data, 0.05, 0.95)
+_, _, _, _, _, _, final_scaled_data = fs_pca(final_data,  n_components=None, n_top_variables=50)
 
 #Save data
-final_data.to_csv("data/final_data.csv", index=False) #Change this
+final_data.to_csv("data/final_data.csv", index=False)
+final_scaled_data.to_csv("data/final_scaled_data.csv", index=False)
