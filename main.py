@@ -40,7 +40,7 @@ data = flooring_capping(data, 0.1, 0.90)
 _, completeness_vars, _ = completeness_filter(data, 80.0)
 
 #Get variables that crossed the variance threshold
-_, _, variance_vars = fs_varianced(data, quartile=3, return_variance_table=False)
+_, _, variance_vars = fs_varianced(data, quartile=3)
 
 #Get the vars that survided the linear correlation filter
 _, linear_filter_vars, _, _, _, _, _ = fs_linear_corr(data, zscore_threshold=2.0)
