@@ -20,6 +20,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import MultiLabelBinarizer
 
+import sys
+data = pd.read_csv(sys.argv[1])
+
 
 #Import own functions
 from definitions import (
@@ -81,9 +84,10 @@ _, _, _, top_variables_pca, _, _, _ = fs_pca(data,  n_components=None, n_top_var
 filters = {
     "completeness_vars": completeness_vars,
     "variance_vars": variance_vars,
-    "linear_vars": linear_filter["final_features"],
-    "non_linear_vars": features_information,
-    "pca_vars": selected_features_vector
+    "linear_vars": linear_filter_vars,
+    "non_linear_vars": information_vars,
+    "pca_vars": top_variables_pca
+
 }
 
 vote_matrix, winners = voting_matrix(filters, min_votes=3)
