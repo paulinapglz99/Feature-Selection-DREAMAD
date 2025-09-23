@@ -241,7 +241,7 @@ def fs_mi_vi_matrix(df: pd.DataFrame, target_vars: list, n_bins: int = 10, thres
     vi_filtered = vi_matrix.where(vi_matrix >= threshold, 0) #Keep the high VI values that meet the condition.
     mi_filtered = mi_matrix.where(vi_matrix >= threshold, 0) #use the ‘difference’ mask (from VI) to see which MI values correspond to those pairs of ‘different’ variables.
 
-    features_information = vi_filtered.columns[(vi_filt > 0).any(axis=0)].tolist()
+    features_information = vi_filtered.columns[(vi_filtered > 0).any(axis=0)].tolist()
 
     return mi_matrix, vi_matrix, features_information, mi_filtered, vi_filtered, threshold
 
