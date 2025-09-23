@@ -258,19 +258,26 @@ def fs_pca(df: pd.DataFrame, n_components: int | None = None, n_top_variables: i
         tuple: A tuple with all the PCA results.
     """
     numerics = df.select_dtypes(include=np.number)
+    non_numerics = df.drop(columns=numerics.columns)  # columnas no numéricas
 
     #Validation: n_components cannot be greater than the number of variables if it is an integer.
     if isinstance(n_components, int) and numerics.shape[1] < n_components:
         raise ValueError("The number of components cannot be greater than the number of variables.")
 
-    scaled_data = StandardScaler().fit_transform(numerics)
+    scaled_array = StandardScaler().fit_transform(numerics)
+    scaled_data = pd.DataFrame(scaled_array, 
+                               columns=numerics.columns, 
+                               index=df.index)
+
+    # Reagregar columnas no numéricas
+    scaled_data = pd.concat([non_numerics, scaled_data], axis=1)
 
     #Excecute PCA
     pca = PCA(n_components=n_components)
-    pca.fit(scaled_data)
+    pca.fit(scaled_array)
 
     #Transform data (scores)
-    pca_data = pca.transform(scaled_data)
+    pca_data = pca.transform(scaled_array)
     pca_df = pd.DataFrame(pca_data,
                           columns=[f'PC{i+1}' for i in range(pca.n_components_)],
                           index=df.index)
@@ -291,7 +298,7 @@ def fs_pca(df: pd.DataFrame, n_components: int | None = None, n_top_variables: i
     #Get the variance per PC
     explained_variance_ratio = pca.explained_variance_ratio_
     cumulative_variance = np.cumsum(explained_variance_ratio)
-
+    
     return pca, pca_df, loadings_df, top_variables, explained_variance_ratio, cumulative_variance, scaled_data
 
 def voting_matrix(filters_dict: dict, min_votes: int = 2):
