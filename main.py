@@ -33,6 +33,32 @@ from definitions import (
     flooring_capping
 )
 
+#Target vars
+
+target_vars = ['ADNC',
+ 'Braak',
+ 'Thal',
+ 'CERAD',
+ 'LATE_0',
+ 'LATE_1',
+ 'LATE_2',
+ 'LATE_3',
+ 'LATE_4',
+ 'Lewy_0',
+ 'Lewy_1',
+ 'Lewy_2',
+ 'Lewy_3',
+ 'Lewy_4',
+ 'Lewy_5',
+ 'Lewy_6',
+ 'percent 6e10 positive area',
+ 'percent AT8 positive area',
+ 'percent NeuN positive area',
+ 'percent GFAP positive area',
+ 'percent aSyn positive area',
+ 'percent pTDP43 positive area',
+ ]
+
 #Flooring and capping
 data = flooring_capping(data, 0.1, 0.90)
 
